@@ -1,11 +1,5 @@
 #include <Wire.h>
 
-//	addresses
-
-int SLAVE_ADDRESS = 9;
-
-//	messages
-
 //  synchronization character
 
 char MESSAGE__SYNCH = 'S';
@@ -15,6 +9,8 @@ char MESSAGE__ERROR = '1';
 //  rewards
 
 char MESSAGES__REWARDS[ 2 ] = { 'A', 'B' };
+
+int SLAVE_ADDRESS = 9;
 
 byte byteRead;
 
@@ -51,7 +47,7 @@ void loop() {
 
     char readChar = toChar( byteRead );
 
-    deliverReward( readChar, REWARD_SIZE	);
+    deliverReward( readChar, REWARD_SIZE );
   }
 
 }

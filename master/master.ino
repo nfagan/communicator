@@ -1,11 +1,5 @@
 #include <Wire.h>
 
-//	addresses
-
-int SLAVE_ADDRESS = 9;
-
-//	messages
-
 //  synchronization character
 
 char MESSAGE__SYNCH = 'S';
@@ -15,6 +9,8 @@ char MESSAGE__ERROR = '1';
 //  rewards
 
 char MESSAGES__REWARDS[ 2 ] = { 'A', 'B' };
+
+int SLAVE_ADDRESS = 9;
 
 byte byteRead;
 
@@ -34,13 +30,7 @@ void loop() {
 	if ( Serial.available() ) {
     byteRead = Serial.read();
 
-    char readChar = toChar( byteRead );
-
-    if ( readChar == MESSAGE__SYNCH ) {
-    	synchronize();
-    } else {
-    	transmit( readChar );
-    }
+    synchronize();
   }
 }
 
@@ -54,6 +44,20 @@ void transmit( char c ) {
 	Wire.endTransmission();
 }
 
+void handleReceipt( int nBytes ) {
+
+	if ( Wire.available() == 0 ) {
+		relay( MESSAGE__ERROR ); 
+		return;
+	}
+
+	message = Wire.read();
+
+	if ( message == MESSAGE__SYNCH ) {
+		relay( message ); return;
+	}
+}
+
 char toChar( byte toConvert ) {
   return toConvert & 0xff;
 }
@@ -61,14 +65,14 @@ char toChar( byte toConvert ) {
 void synchronize() {
 	transmit( MESSAGE__SYNCH );
 
-	delay( 100 );
+	Wire.beginTransmission( SLAVE_ADDRESS );
 
 	Wire.requestFrom( SLAVE_ADDRESS, 1 );
 
 	while ( !Wire.available() ) {
 		//	wait in the loop until we get a response
-		delay( 5 );
-		relay( MESSAGE__AWAIT_SYNCH );
+		delay( 10 );
+		relay( MESSAGE__AWAIT_SYNCH )
 		continue;
 	}
 
