@@ -65,8 +65,6 @@ char toChar( byte toConvert ) {
 void synchronize() {
 	transmit( MESSAGE__SYNCH );
 
-	Wire.beginTransmission( SLAVE_ADDRESS );
-
 	Wire.requestFrom( SLAVE_ADDRESS, 1 );
 
 	while ( !Wire.available() ) {
