@@ -72,7 +72,7 @@ void synchronize() {
 	while ( !Wire.available() ) {
 		//	wait in the loop until we get a response
 		delay( 10 );
-		relay( MESSAGE__AWAIT_SYNCH )
+		relay( MESSAGE__AWAIT_SYNCH );
 		continue;
 	}
 
