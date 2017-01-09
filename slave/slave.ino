@@ -1,16 +1,18 @@
 #include <Wire.h>
 
-//  synchronization character
+//  MESSAGES
 
 char MESSAGE__SYNCH = 'S';
 char MESSAGE__AWAIT_SYNCH = 'W';
 char MESSAGE__ERROR = '1';
-
-//  rewards
-
+char MESSAGE__EYE = 'E'
 char MESSAGES__REWARDS[ 2 ] = { 'A', 'B' };
 
+//	ADDRESSES
+
 int SLAVE_ADDRESS = 9;
+
+//	READ FROM SERIAL
 
 byte byteRead;
 
@@ -44,10 +46,17 @@ void loop() {
 
 	if ( Serial.available() ) {
     byteRead = Serial.read();
-
     char readChar = toChar( byteRead );
 
-    deliverReward( readChar, REWARD_SIZE );
+    if ( readChar == MESSAGE__EYE ) {
+    	//
+    }
+
+    //	check to see if this is a reward message
+    int index = findIndex( MESSAGES__REWARDS, N_REWARDS, readChar );
+    if ( index != -1 ) {
+    	deliverReward( index, REWARD_SIZE );
+    }
   }
 
 }
@@ -67,12 +76,16 @@ void handleReceipt( int nBytes ) {
 
 	if ( message == MESSAGE__SYNCH ) {
 		Wire.write( message );
-		relay( message ); return;
+		relay( message ); 
+		return;
 	}
 
 	//	otherwise, send a reward
 
-	deliverReward( message, REWARD_SIZE );
+	int index = findIndex( MESSAGES__REWARDS, N_REWARDS, message );
+	if ( index != -1 ) {
+		deliverReward( index, REWARD_SIZE );
+	}
 
 }
 
@@ -80,10 +93,7 @@ void handleRequest() {
 	Wire.write( message );
 }
 
-void deliverReward( char msg, int amount ) {
-	int index = findIndex( MESSAGES__REWARDS, N_REWARDS, msg );
-	if ( index == -1 ); return;
-
+void deliverReward( int index, int amount ) {
 	digitalWrite( REWARD_PINS[ index ], HIGH );
 	delay( amount );
 	digitalWrite( REWARD_PINS[ index ], LOW );

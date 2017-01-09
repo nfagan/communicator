@@ -1,22 +1,26 @@
 #include <Wire.h>
 
-//  synchronization character
+//  MESSAGES
 
 char MESSAGE__SYNCH = 'S';
 char MESSAGE__AWAIT_SYNCH = 'W';
 char MESSAGE__ERROR = '1';
-
-//  rewards
-
+char MESSAGE__EYE = 'E'
 char MESSAGES__REWARDS[ 2 ] = { 'A', 'B' };
 
+//	ADDRESSES
+
 int SLAVE_ADDRESS = 9;
+
+//	READ FROM SERIAL
 
 byte byteRead;
 
 //	response character
 
 char message = MESSAGE__ERROR;
+
+//	BEGIN
 
 void setup() {
 	Wire.begin();
@@ -28,9 +32,18 @@ void loop() {
 	//	serial handling
 
 	if ( Serial.available() ) {
-    byteRead = Serial.read();
+		byteRead = Serial.read();
 
-    synchronize();
+		char readChar = toChar( byteRead );
+
+		if ( readChar == MESSAGE__SYNCH ) {
+			synchronize();
+		} else if ( readChar == MESSAGE__EYE ) {
+			//	handle 
+		} else {
+			//	deliver reward
+			transmit( readChar );
+		}
   }
 }
 
@@ -42,20 +55,6 @@ void transmit( char c ) {
 	Wire.beginTransmission( SLAVE_ADDRESS );
 	Wire.write( c );
 	Wire.endTransmission();
-}
-
-void handleReceipt( int nBytes ) {
-
-	if ( Wire.available() == 0 ) {
-		relay( MESSAGE__ERROR ); 
-		return;
-	}
-
-	message = Wire.read();
-
-	if ( message == MESSAGE__SYNCH ) {
-		relay( message ); return;
-	}
 }
 
 char toChar( byte toConvert ) {
@@ -80,5 +79,19 @@ void synchronize() {
 		relay( response );
 	} else {
 		synchronize();
+	}
+}
+
+void handleReceipt( int nBytes ) {
+
+	if ( Wire.available() == 0 ) {
+		relay( MESSAGE__ERROR ); 
+		return;
+	}
+
+	message = Wire.read();
+
+	if ( message == MESSAGE__SYNCH ) {
+		relay( message ); return;
 	}
 }
