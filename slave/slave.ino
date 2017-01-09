@@ -5,8 +5,12 @@
 char MESSAGE__SYNCH = 'S';
 char MESSAGE__AWAIT_SYNCH = 'W';
 char MESSAGE__ERROR = '1';
-char MESSAGE__EYE = 'E'
+char MESSAGE__EYE_START = 'E';
+char MESSAGE__EYE_END = 'T';
+char MESSAGE__EYE_X = 'X';
+char MESSAGE__EYE_Y = 'Y';
 char MESSAGES__REWARDS[ 2 ] = { 'A', 'B' };
+char MESSAGE__REWARD_DELIVERED = 'R';
 
 //	ADDRESSES
 
@@ -31,7 +35,7 @@ const int REWARD_SIZE = 100;
 
 void setup() {
 	Wire.begin( SLAVE_ADDRESS );
-	Serial.begin( 9600 );
+	Serial.begin( 115200 );
 	Wire.onRequest( handleRequest );
 	Wire.onReceive( handleReceipt );
 
@@ -47,11 +51,9 @@ void loop() {
 	if ( Serial.available() ) {
     byteRead = Serial.read();
     char readChar = toChar( byteRead );
-
-    if ( readChar == MESSAGE__EYE ) {
-    	//
+    if ( readChar == MESSAGE__EYE_START ) {
+    	relay( readChar );
     }
-
     //	check to see if this is a reward message
     int index = findIndex( MESSAGES__REWARDS, N_REWARDS, readChar );
     if ( index != -1 ) {
@@ -72,20 +74,35 @@ void handleReceipt( int nBytes ) {
 		return;
 	}
 
-	message = Wire.read();
+  if ( nBytes == 1 ) {
 
-	if ( message == MESSAGE__SYNCH ) {
-		Wire.write( message );
-		relay( message ); 
-		return;
-	}
+  	message = Wire.read();
+  
+  	if ( message == MESSAGE__SYNCH ) {
+  		Wire.write( message );
+  		relay( message ); 
+  		return;
+  	}
+  
+  	//	see if this is a reward character
+  
+  	int index = findIndex( MESSAGES__REWARDS, N_REWARDS, message );
+  	if ( index != -1 ) {
+      relay( MESSAGES__REWARDS[index] );
+  		deliverReward( index, REWARD_SIZE );
+  	}
+    return;
+  }
 
-	//	otherwise, send a reward
+  //  otherwise, this is an eye position
 
-	int index = findIndex( MESSAGES__REWARDS, N_REWARDS, message );
-	if ( index != -1 ) {
-		deliverReward( index, REWARD_SIZE );
-	}
+  String inStr = "";
+  while ( Wire.available() > 0 ) {
+    char inChar = Wire.read();
+    inStr += inChar;
+  }
+
+  Serial.println( inStr );
 
 }
 

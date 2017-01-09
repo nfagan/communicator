@@ -5,8 +5,12 @@
 char MESSAGE__SYNCH = 'S';
 char MESSAGE__AWAIT_SYNCH = 'W';
 char MESSAGE__ERROR = '1';
-char MESSAGE__EYE = 'E'
+char MESSAGE__EYE_START = 'E';
+char MESSAGE__EYE_END = 'T';
+char MESSAGE__EYE_X = 'X';
+char MESSAGE__EYE_Y = 'Y';
 char MESSAGES__REWARDS[ 2 ] = { 'A', 'B' };
+char MESSAGE__REWARD_DELIVERED = 'R';
 
 //	ADDRESSES
 
@@ -23,38 +27,57 @@ char message = MESSAGE__ERROR;
 //	BEGIN
 
 void setup() {
-	Wire.begin();
-	Serial.begin( 9600 );
+  Wire.begin();
+  Serial.begin( 115200 );
 }
 
 void loop() {
 
-	//	serial handling
+  //	serial handling
 
-	if ( Serial.available() ) {
-		byteRead = Serial.read();
+  if ( Serial.available() ) {
+    byteRead = Serial.read();
 
-		char readChar = toChar( byteRead );
+    char readChar = toChar( byteRead );
 
-		if ( readChar == MESSAGE__SYNCH ) {
-			synchronize();
-		} else if ( readChar == MESSAGE__EYE ) {
-			//	handle 
-		} else {
-			//	deliver reward
-			transmit( readChar );
-		}
+    if ( readChar == MESSAGE__SYNCH ) {
+      synchronize();
+    } else if ( readChar == MESSAGE__EYE_START ) {
+      String inStr = "";
+      while ( Serial.available() == 0 ) {
+        delay(5);
+      }
+      while ( Serial.available() > 0 ) {
+        int inChar = Serial.read();
+        if ( inChar == MESSAGE__EYE_END ) {
+//          Serial.println( inStr );
+          delay( 5 );
+          Wire.beginTransmission( SLAVE_ADDRESS );
+          Wire.write( inStr.c_str() );
+          Wire.endTransmission();
+          break;
+        } else {
+          inStr += (char)inChar;
+        }
+      }
+    } else if ( readChar == 'T' ) {
+      relay( '*' );
+    } else {
+      //	deliver reward by relaying the message
+      //  to the slave
+      transmit( readChar );
+    }
   }
 }
 
 void relay( char c ) {
-	Serial.write( c );
+  Serial.write( c );
 }
 
 void transmit( char c ) {
-	Wire.beginTransmission( SLAVE_ADDRESS );
-	Wire.write( c );
-	Wire.endTransmission();
+  Wire.beginTransmission( SLAVE_ADDRESS );
+  Wire.write( c );
+  Wire.endTransmission();
 }
 
 char toChar( byte toConvert ) {
@@ -62,36 +85,36 @@ char toChar( byte toConvert ) {
 }
 
 void synchronize() {
-	transmit( MESSAGE__SYNCH );
+  transmit( MESSAGE__SYNCH );
 
-	Wire.requestFrom( SLAVE_ADDRESS, 1 );
+  Wire.requestFrom( SLAVE_ADDRESS, 1 );
 
-	while ( !Wire.available() ) {
-		//	wait in the loop until we get a response
-		delay( 10 );
-		relay( MESSAGE__AWAIT_SYNCH );
-		continue;
-	}
+  while ( !Wire.available() ) {
+    //	wait in the loop until we get a response
+    delay( 10 );
+    relay( MESSAGE__AWAIT_SYNCH );
+    continue;
+  }
 
-	char response = Wire.read();
+  char response = Wire.read();
 
-	if ( response == MESSAGE__SYNCH ) {
-		relay( response );
-	} else {
-		synchronize();
-	}
+  if ( response == MESSAGE__SYNCH ) {
+    relay( response );
+  } else {
+    synchronize();
+  }
 }
 
 void handleReceipt( int nBytes ) {
 
-	if ( Wire.available() == 0 ) {
-		relay( MESSAGE__ERROR ); 
-		return;
-	}
+  if ( Wire.available() == 0 ) {
+    relay( MESSAGE__ERROR );
+    return;
+  }
 
-	message = Wire.read();
+  message = Wire.read();
 
-	if ( message == MESSAGE__SYNCH ) {
-		relay( message ); return;
-	}
+  if ( message == MESSAGE__SYNCH ) {
+    relay( message ); return;
+  }
 }
