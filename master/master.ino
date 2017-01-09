@@ -43,21 +43,20 @@ void loop() {
     if ( readChar == MESSAGE__SYNCH ) {
       synchronize();
     } else if ( readChar == MESSAGE__EYE_START ) {
-      String inStr = "";
+      String eyePosition = "";
       while ( Serial.available() == 0 ) {
         delay(5);
       }
       while ( Serial.available() > 0 ) {
-        int inChar = Serial.read();
-        if ( inChar == MESSAGE__EYE_END ) {
-//          Serial.println( inStr );
+        int pos = Serial.read();
+        if ( pos == MESSAGE__EYE_END ) {
           delay( 5 );
           Wire.beginTransmission( SLAVE_ADDRESS );
-          Wire.write( inStr.c_str() );
+          Wire.write( eyePosition.c_str() );
           Wire.endTransmission();
           break;
         } else {
-          inStr += (char)inChar;
+          eyePosition += (char)pos;
         }
       }
     } else if ( readChar == 'T' ) {

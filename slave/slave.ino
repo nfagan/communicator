@@ -33,88 +33,119 @@ int REWARD_PINS[ N_REWARDS ] = { 37, 40 };
 
 const int REWARD_SIZE = 100;
 
-void setup() {
-	Wire.begin( SLAVE_ADDRESS );
-	Serial.begin( 115200 );
-	Wire.onRequest( handleRequest );
-	Wire.onReceive( handleReceipt );
+//  GAZE POSITION
 
-	for ( int i = 0; i < N_REWARDS; i++ ) {
-		pinMode( REWARD_PINS[i], OUTPUT );
+long OWN[ 2 ] = { 0, 0 };
+long OTHER[ 2 ] = { 0, 0 };
+int BOUNDS = 200;
+
+void setup() {
+  Wire.begin( SLAVE_ADDRESS );
+  Serial.begin( 115200 );
+  Wire.onRequest( handleRequest );
+  Wire.onReceive( handleReceipt );
+
+  for ( int i = 0; i < N_REWARDS; i++ ) {
+    pinMode( REWARD_PINS[i], OUTPUT );
   }
 }
 
 void loop() {
 
-	//	rewards
+  //	rewards
 
-	if ( Serial.available() ) {
+  if ( Serial.available() ) {
     byteRead = Serial.read();
     char readChar = toChar( byteRead );
     if ( readChar == MESSAGE__EYE_START ) {
-    	relay( readChar );
+      relay( readChar );
     }
     //	check to see if this is a reward message
     int index = findIndex( MESSAGES__REWARDS, N_REWARDS, readChar );
     if ( index != -1 ) {
-    	deliverReward( index, REWARD_SIZE );
+      deliverReward( index, REWARD_SIZE );
     }
   }
 
 }
 
 void relay( char c ) {
-	Serial.write( c );
+  Serial.write( c );
 }
 
 void handleReceipt( int nBytes ) {
 
-	if ( Wire.available() == 0 ) {
-		relay( MESSAGE__ERROR ); 
-		return;
-	}
+  if ( Wire.available() == 0 ) {
+    relay( MESSAGE__ERROR );
+    return;
+  }
 
   if ( nBytes == 1 ) {
 
-  	message = Wire.read();
-  
-  	if ( message == MESSAGE__SYNCH ) {
-  		Wire.write( message );
-  		relay( message ); 
-  		return;
-  	}
-  
-  	//	see if this is a reward character
-  
-  	int index = findIndex( MESSAGES__REWARDS, N_REWARDS, message );
-  	if ( index != -1 ) {
+    message = Wire.read();
+
+    if ( message == MESSAGE__SYNCH ) {
+      Wire.write( message );
+      relay( message );
+      return;
+    }
+
+    //	see if this is a reward character
+
+    int index = findIndex( MESSAGES__REWARDS, N_REWARDS, message );
+    if ( index != -1 ) {
       relay( MESSAGES__REWARDS[index] );
-  		deliverReward( index, REWARD_SIZE );
-  	}
+      deliverReward( index, REWARD_SIZE );
+    }
     return;
   }
 
   //  otherwise, this is an eye position
 
-  String inStr = "";
+  String eyePosition = "";
   while ( Wire.available() > 0 ) {
-    char inChar = Wire.read();
-    inStr += inChar;
+    char pos = Wire.read();
+    eyePosition += pos;
   }
 
-  Serial.println( inStr );
+  //  eyePosition[0] will be the
+  //  X or Y target. Update the corresponding
+  //  OTHER array accordingly
+
+  char positionID = eyePosition.charAt( 0 );
+  bool valid = false;
+  int posIndex;
+  if ( positionID == 'X' ) {
+    valid = true;
+    posIndex = 0;
+  } else if ( positionID == 'Y' ) {
+    valid = true;
+    posIndex = 1;
+  }
+
+  if ( valid ) {
+    int bufferSize = eyePosition.length() + 1;
+    char charNumber[ bufferSize ] = { 'b' };
+    //  get rid of the X or Y
+    eyePosition.remove(0, 1);
+    eyePosition.toCharArray( charNumber, bufferSize );
+    OTHER[ posIndex ] = atol( charNumber );
+    Serial.println( OTHER[ posIndex ] );
+  } else {
+    Serial.println( '!' ); 
+  }
 
 }
 
 void handleRequest() {
-	Wire.write( message );
+  Wire.write( message );
 }
 
 void deliverReward( int index, int amount ) {
-	digitalWrite( REWARD_PINS[ index ], HIGH );
-	delay( amount );
-	digitalWrite( REWARD_PINS[ index ], LOW );
-	delay( 100 );
+  digitalWrite( REWARD_PINS[ index ], HIGH );
+  delay( amount );
+  digitalWrite( REWARD_PINS[ index ], LOW );
+  delay( 100 );
 }
 
 char toChar( byte toConvert ) {
@@ -123,7 +154,7 @@ char toChar( byte toConvert ) {
 
 int findIndex( char arr[], int len, char lookFor ) {
   for ( int i = 0; i < len; ++i ) {
-    if ( arr[i] == lookFor ) return i; 
+    if ( arr[i] == lookFor ) return i;
   }
   return -1;
 }
