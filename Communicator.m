@@ -94,6 +94,25 @@ classdef Communicator
       if ( nargin < 2 ); n = 1; end;
       response = fscanf( obj.communicator, '%s', n );
     end
+    
+    function responses = receive_all(obj)
+      
+      %   RECEIVE_ALL -- Concatenate all available responses into a single
+      %     response.
+      %
+      %     OUT:
+      %       `responses` (char) -- character vector of responses received
+      %       since the last call to receive_all() or receive();
+      
+      N = obj.communicator.BytesAvailable;
+      responses = '';
+      if ( N == 0 ), return; end;      
+      while ( N > 0 )
+        responses = sprintf( '%s%s', responses, ...
+          fscanf(obj.communicator, '%s', 1) );
+        N = obj.communicator.BytesAvailable;
+      end
+    end
 
     %   start the serial communicator
 

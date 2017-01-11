@@ -12,6 +12,12 @@ char MESSAGE__EYE_Y = 'Y';
 char MESSAGES__REWARDS[ 2 ] = { 'A', 'B' };
 char MESSAGE__REWARD_DELIVERED = 'R';
 
+// DEBUG
+
+char DEBUG__RESET_GAZE = 'U';
+char DEBUG__PRINT_GAZE = 'C';
+char DEBUG__COMPARE_GAZE = 'P';
+
 //	ADDRESSES
 
 int SLAVE_ADDRESS = 9;
@@ -73,8 +79,12 @@ void loop() {
         }
       }
       updateEyePosition( eyePosition, true );
-    } else if ( readChar == 'P' ) {
+    } else if ( readChar == DEBUG__COMPARE_GAZE ) {
       compareOwnToOtherPosition();
+    } else if ( readChar == DEBUG__PRINT_GAZE ) {
+      printGaze( true ); printGaze( false );
+    } else if ( readChar == DEBUG__RESET_GAZE ) {
+      resetGaze( true ); resetGaze( false );
     } else {
       //  check to see if this is a reward message
       int index = findIndex( MESSAGES__REWARDS, N_REWARDS, readChar );
@@ -87,6 +97,31 @@ void loop() {
 
 void relay( char c ) {
   Serial.write( c );
+}
+
+void resetGaze( bool resetOwn ) {
+  for ( int i = 0; i < 2; i++ ) {
+    if ( resetOwn ) {
+      OWN[i] = 0;    
+    } else {
+      OTHER[i] = 0;
+    }
+  }
+}
+
+void printGaze( bool logOwn ) {
+  char ids[ 2 ] = { 'X', 'Y' };
+  for ( int i = 0; i < 2; i++ ) {
+    if ( logOwn ) {
+      Serial.println( "OWN:" );
+      Serial.println( ids[i] );
+      Serial.println( OWN[i] );
+    } else {
+      Serial.println( "OTHER:" );
+      Serial.println( ids[i] );
+      Serial.println( OTHER[i] );
+    }
+  }
 }
 
 void handleReceipt( int nBytes ) {
@@ -162,12 +197,8 @@ void updateEyePosition( String eyePosition, bool isOwn ) {
   }
   if ( isOwn ) {
     OWN[ posIndex ] = stringEyePositionToInt( eyePosition );
-    Serial.println( "OWN" );
-    Serial.println( OWN[ posIndex ] );
   } else {
     OTHER[ posIndex ] = stringEyePositionToInt( eyePosition );
-    Serial.println( "OTHER" );
-    Serial.println( OTHER[ posIndex ] );
   }
 }
 

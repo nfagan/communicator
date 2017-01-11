@@ -18,3 +18,10 @@ comm.send_gaze( 'Y', 250 );
 %%
 
 comm.send( 'REWARDA' );
+
+%%
+i = 1;
+while i <= 100;
+  pause( .001 );
+  comm.send_gaze('X', i); comm.send_gaze('Y', i*2); i = i + 1;
+end
