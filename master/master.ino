@@ -10,6 +10,8 @@ char MESSAGE__EYE_END = 'T';
 char MESSAGE__EYE_X = 'X';
 char MESSAGE__EYE_Y = 'Y';
 char MESSAGES__REWARDS[ 2 ] = { 'A', 'B' };
+char MESSAGE__REWARD_SIZE_START = 'U';
+char MESSAGE__REWARD_SIZE_END = 'V';
 char MESSAGE__REWARD_DELIVERED = 'R';
 
 //	ADDRESSES
@@ -57,6 +59,23 @@ void loop() {
           break;
         } else {
           eyePosition += (char)pos;
+        }
+      }
+    } else if ( readChar == MESSAGE__REWARD_SIZE_START ) {
+      String rewardSize = "";
+      while ( Serial.available() == 0 ) {
+        delay(5);
+      }
+      while ( Serial.available() > 0 ) {
+        int pos = Serial.read();
+        if ( pos == MESSAGE__REWARD_SIZE_END ) {
+          delay( 5 );
+          Wire.beginTransmission( SLAVE_ADDRESS );
+          Wire.write( rewardSize.c_str() );
+          Wire.endTransmission();
+          break;
+        } else {
+          rewardSize += (char)pos;
         }
       }
     } else if ( readChar == 'T' ) {

@@ -6,7 +6,8 @@ classdef Communicator
     communicator;
     const = struct( ...
       'chars', struct( ...
-        'GAZE_START', 'E', 'GAZE_END', 'T' ...
+          'GAZE_START', 'E', 'GAZE_END', 'T' ...
+        , 'RWD_SIZE_START', 'U', 'RWD_SIZE_END', 'V' ...
         ) ...
       );
   end
@@ -67,6 +68,22 @@ classdef Communicator
       if ~any(index); error('The message ''%s'' has not been defined', message); end;
       char = obj.chars{ index };
       fprintf( obj.communicator, '%s', char );
+    end
+    
+    function send_reward_size(obj, channel, value)
+      
+      %   SEND_REWARD_SIZE -- Update the reward size associated with the
+      %     specified channel.
+      %
+      %     IN:
+      %       - `channel` (char) -- Channel identifier.
+      %       - `value` (int) -- New reward size, in ms.
+      
+      RWD_START = obj.const.chars.RWD_SIZE_START;
+      RWD_END = obj.const.chars.RWD_SIZE_END;
+      str = sprintf( '%s%s%d%s', RWD_START, upper(channel), round(value) ...
+        , RWD_END );
+      fprintf( obj.communicator, '%s', str );
     end
     
     function send_gaze(obj, dimension, values)
