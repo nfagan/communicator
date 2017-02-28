@@ -169,12 +169,13 @@ void handleReceipt( int nBytes ) {
     if ( message == DEBUG__PRINT_GAZE ) {
       printGaze( true );
       printGaze( false );
+      return;
     }
     //	see if this is a reward character
-    int index = findIndex( MESSAGES__REWARDS, N_REWARDS, message );
-    if ( index != -1 ) {
-//      relay( MESSAGES__REWARDS[index] );
-      deliverReward( index );
+    int rwdIndex = findIndex( MESSAGES__REWARDS, N_REWARDS, message );
+    if ( rwdIndex != -1 ) {
+      deliverReward( rwdIndex );
+    } else {
     }
     return;
   }
