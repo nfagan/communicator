@@ -8,6 +8,9 @@ classdef Communicator
       'chars', struct( ...
           'GAZE_START', 'E', 'GAZE_END', 'T' ...
         , 'RWD_SIZE_START', 'U', 'RWD_SIZE_END', 'V' ...
+        , 'STATE_START', 'I', 'STATE_END', 'O' ...
+        , 'CHOICE_START', 'F', 'CHOICE_END', 'G', 'CHOICE_ID', 'f' ...
+        , 'FIX_START', 's', 'FIX_END', 'e', 'FIX_ID', 'i' ...
         ) ...
       );
   end
@@ -70,6 +73,19 @@ classdef Communicator
       fprintf( obj.communicator, '%s', char );
     end
     
+    function send_state(obj, state)
+      
+      %   SEND_STATE -- Update the current state.
+      %
+      %     IN:
+      %       - `state` (int) -- State to set.
+      
+      STATE_START = obj.const.chars.STATE_START;
+      STATE_END = obj.const.chars.STATE_END;
+      str = sprintf( '%s%d%s', STATE_START, state, STATE_END );
+      fprintf( obj.communicator, '%s', str );
+    end
+    
     function send_reward_size(obj, channel, value)
       
       %   SEND_REWARD_SIZE -- Update the reward size associated with the
@@ -83,6 +99,34 @@ classdef Communicator
       RWD_END = obj.const.chars.RWD_SIZE_END;
       str = sprintf( '%s%s%d%s', RWD_START, upper(channel), round(value) ...
         , RWD_END );
+      fprintf( obj.communicator, '%s', str );
+    end
+    
+    function send_choice(obj, N)
+      
+      %   SEND_CHOICE -- Send M2's choice.
+      %
+      %     IN:
+      %       - `N` (double) -- Chosen option.
+      
+      CHOICE_START = obj.const.chars.CHOICE_START;
+      CHOICE_ID = obj.const.chars.CHOICE_ID;
+      CHOICE_END = obj.const.chars.CHOICE_END;
+      str = sprintf( '%s%s%d%s', CHOICE_START, CHOICE_ID, N, CHOICE_END );
+      fprintf( obj.communicator, '%s', str );
+    end
+    
+    function send_fix_met(obj, tf)
+      
+      %   SEND_CHOICE -- Update whether the fixation duration has been met.
+      %
+      %     IN:
+      %       - `tf` (true, false)
+      
+      FIX_START = obj.const.chars.FIX_START;
+      FIX_ID = obj.const.chars.FIX_ID;
+      FIX_END = obj.const.chars.FIX_END;
+      str = sprintf( '%s%s%d%s', FIX_START, FIX_ID, tf, FIX_END );
       fprintf( obj.communicator, '%s', str );
     end
     
@@ -112,6 +156,23 @@ classdef Communicator
       response = fscanf( obj.communicator, '%s', n );
     end
     
+    function response = await_and_return_non_null(obj)
+      
+      %   AWAIT_NON_NULL_RECEIPT -- Return the first non null ('') response
+      %     from the Arduino.
+      %
+      %     OUT:
+      %       - `response` (char) -- Single non-null response.
+      
+      while ( obj.communicator.BytesAvailable == 0 )
+        continue;
+      end
+      response = obj.receive();
+      while ( isequal(response, '') )
+        response = obj.receive();
+      end
+    end
+    
     function responses = receive_all(obj)
       
       %   RECEIVE_ALL -- Concatenate all available responses into a single
@@ -129,6 +190,22 @@ classdef Communicator
           fscanf(obj.communicator, '%s', 1) );
         N = obj.communicator.BytesAvailable;
       end
+    end
+    
+    function c = get_char(obj, message)
+      
+      %   GET_CHAR -- Get the character associated with a given message.
+      %
+      %     An error is thrown if the message is not found.
+      %
+      %     IN:
+      %       - `message` (char) -- Message to query.
+      %     OUT:
+      %       - `c` (char) -- Associated char.
+      
+      message_ind = strcmp( obj.messages, message );
+      assert( any(message_ind), 'The specified message does not exist.' );
+      c = obj.chars{ message_ind };
     end
 
     %   start the serial communicator

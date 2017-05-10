@@ -1,53 +1,50 @@
 #include <Wire.h>
+#include <BrainsTask.h>
 
 //  MESSAGES
 
-char MESSAGE__SYNCH = 'S';
-char MESSAGE__AWAIT_SYNCH = 'W';
-char MESSAGE__ERROR = '1';
-char MESSAGE__EYE_START = 'E';
-char MESSAGE__EYE_END = 'T';
-char MESSAGE__EYE_X = 'X';
-char MESSAGE__EYE_Y = 'Y';
-char MESSAGES__REWARDS[ 2 ] = { 'A', 'B' };
-char MESSAGE__REWARD_SIZE_START = 'U';
-char MESSAGE__REWARD_SIZE_END = 'V';
-char MESSAGE__REWARD_DELIVERED = 'R';
-
 // DEBUG
-
 char DEBUG__RESET_GAZE = 'D';
 char DEBUG__PRINT_GAZE = 'P';
 char DEBUG__COMPARE_GAZE = 'C';
 char DEBUG__PRINT_REWARDS = 'Q';
+bool DEBUG = false;
 
-//	ADDRESSES
+bool SHOULD_DELIVER_REWARD = false;
+int CURRENT_REWARD_INDEX = 0;
 
+//  ADDRESSES
 int SLAVE_ADDRESS = 9;
 
-//	READ FROM SERIAL
-
+//  READ FROM SERIAL
 byte byteRead;
 
-//	response character
-
+//  response character
 char message = MESSAGE__ERROR;
 
-//	configure pin numbers
-
+//  configure reward
 const int N_REWARDS = 2;
-int REWARD_PINS[ N_REWARDS ] = { 37, 40 };
-
-//	reward size
-
-const int REWARD_SIZE = 100;
+int REWARD_PINS[ N_REWARDS ] = { 11, 40 };
+// IMPORTANT -- Check master.ino to ensure
+// none of these reward characters are those
+// match those of the slave
+char MESSAGES__REWARDS[ N_REWARDS ] = { 'A', 'B' };
 int REWARD_SIZES[ N_REWARDS ] = { 100, 100 };
 
 //  GAZE POSITION
-
 long OWN[ 2 ] = { 0, 0 };
 long OTHER[ 2 ] = { 0, 0 };
 int BOUNDS = 200;
+
+//  STATES
+int STATES[ 2 ] = { 0, 0 };
+
+//  FIXATION DURATION
+
+int FIX_MET[ 2 ] = { 0, 0 };
+
+//  Choices
+int CORRECT_CHOICE = 0;
 
 void setup() {
   Wire.begin( SLAVE_ADDRESS );
@@ -63,7 +60,7 @@ void setup() {
 
 void loop() {
 
-  //	slave serial input
+  //  slave serial input
 
   if ( Serial.available() ) {
     byteRead = Serial.read();
@@ -71,33 +68,28 @@ void loop() {
     //  update our OWN current gaze coordinates
     //  if readChar corresponds to MESSAGE__EYE_START    
     if ( readChar == MESSAGE__EYE_START ) {
-      String eyePosition = "";
-      while ( Serial.available() == 0 ) {
-        delay(5);
-      }
-      while ( Serial.available() > 0 ) {
-        int pos = Serial.read();
-        if ( pos == MESSAGE__EYE_END ) {
-          break;
-        } else {
-          eyePosition += (char)pos;
-        }
-      }
+      String eyePosition = readIn( MESSAGE__EYE_END, "" );
       updateEyePosition( eyePosition, true );
     } else if ( readChar == MESSAGE__REWARD_SIZE_START ) {
-      String rewardSize = "";
-      while ( Serial.available() == 0 ) {
-        delay(5);
-      }
-      while ( Serial.available() > 0 ) {
-        int size_int = Serial.read();
-        if ( size_int == MESSAGE__REWARD_SIZE_END ) {
-          break;
-        } else {
-          rewardSize += (char)size_int;
-        }
-      }
+      String rewardSize = readIn( MESSAGE__REWARD_SIZE_END, "" );
       updateRewardSizes( rewardSize );
+    } else if ( readChar == MESSAGE__CHOICE_START ) {
+      String chosenOption = readIn( MESSAGE__CHOICE_END, "" );
+      updateChoice( chosenOption );
+    } else if ( readChar == MESSAGE__STATE_START ) {
+      //  n.b. incomingState must be defined with a single
+      //  char, unlike eyePosition, etc.
+      String incomingState = readIn( MESSAGE__STATE_END, "b" );
+      updateStates( incomingState, true );
+    } else if ( readChar == MESSAGE__FIX_START ) {
+      String readFix = readIn( MESSAGE__FIX_END, "" );
+      updateFixMet( readFix, true );
+    } else if ( readChar == MESSAGE__COMPARE_STATES ) {
+      Serial.println( statesMatchChar() );
+    } else if ( readChar == MESSAGE__COMPARE_GAZE ) {
+      Serial.println( gazesMatchChar() );
+    } else if ( readChar == MESSAGE__COMPARE_FIX_MET ) {
+      Serial.println( fixMetMatchChar() );
     } else if ( readChar == DEBUG__PRINT_REWARDS ) {
       printRewards();
     } else if ( readChar == DEBUG__COMPARE_GAZE ) {
@@ -106,6 +98,9 @@ void loop() {
       printGaze( true ); printGaze( false );
     } else if ( readChar == DEBUG__RESET_GAZE ) {
       resetGaze( true ); resetGaze( false );
+    } else if ( readChar == MESSAGE__REQUEST_CHOICE ) {
+      Serial.println( CORRECT_CHOICE );
+      CORRECT_CHOICE = 0;
     } else {
       //  check to see if this is a reward message
       int index = findIndex( MESSAGES__REWARDS, N_REWARDS, readChar );
@@ -113,6 +108,12 @@ void loop() {
         deliverReward( index );
       }
     }
+  }
+
+  //  allow master to trigger rewards
+  if ( SHOULD_DELIVER_REWARD ) {
+    deliverReward( CURRENT_REWARD_INDEX );
+    SHOULD_DELIVER_REWARD = false;
   }
 }
 
@@ -154,6 +155,8 @@ void printRewards() {
 
 void handleReceipt( int nBytes ) {
 
+  //  Respond to transmission of data from master.
+
   if ( Wire.available() == 0 ) {
     relay( MESSAGE__ERROR );
     return;
@@ -166,21 +169,34 @@ void handleReceipt( int nBytes ) {
       relay( message );
       return;
     }
+    if ( message == MESSAGE__COMPARE_STATES ) {
+      Wire.write( statesMatchChar() );
+      return;
+    }
+    if ( message == MESSAGE__COMPARE_FIX_MET ) {
+      Wire.write( fixMetMatchChar() );
+      return;
+    }
+    if ( message == MESSAGE__COMPARE_GAZE ) {
+      Wire.write( gazesMatchChar() );
+      return;
+    }
     if ( message == DEBUG__PRINT_GAZE ) {
       printGaze( true );
       printGaze( false );
       return;
     }
-    //	see if this is a reward character
+    //  see if this is a reward character
     int rwdIndex = findIndex( MESSAGES__REWARDS, N_REWARDS, message );
     if ( rwdIndex != -1 ) {
-      deliverReward( rwdIndex );
-    } else {
+//      deliverReward( rwdIndex );
+      SHOULD_DELIVER_REWARD = true;
+      CURRENT_REWARD_INDEX = rwdIndex;
     }
     return;
   }
-  //  otherwise, this is either an eye position
-  //  or a reward size
+  //  otherwise, this is an eye position, reward size
+  //  state message, or choice message
   String valueStr = "";
   while ( Wire.available() > 0 ) {
     char pos = Wire.read();
@@ -191,25 +207,68 @@ void handleReceipt( int nBytes ) {
   //  X or Y target. Update the corresponding
   //  OTHER array accordingly
 
-  char id_char = valueStr.charAt( 0 );
-  if ( id_char == 'X' || id_char == 'Y' ) {
-    updateEyePosition( valueStr, false ); 
+  char idChar = valueStr.charAt( 0 );
+  bool isRewardMessage = findIndex( MESSAGES__REWARDS, N_REWARDS, idChar ) != -1;
+  if ( isRewardMessage ) {
+    updateRewardSizes( valueStr );
+    return;
+  }
+  if ( idChar == 'X' || idChar == 'Y' ) {
+    updateEyePosition( valueStr, false );
+  } else if ( idChar == MESSAGE__CHOICE_ID ) {
+    updateChoice( valueStr );
+  } else if ( idChar == MESSAGE__FIX_ID ) {
+    updateFixMet( valueStr, false );
   } else {
-    updateRewardSizes( valueStr ); 
+    updateStates( valueStr, false );
   }
 }
 
-void compareOwnToOtherPosition() {
+bool gazesMatch() {
   bool isWithinBounds[ 2 ] = { false, false };
   for ( int i = 0; i < 2; i++ ) {
     isWithinBounds[i] = abs( OWN[i] - OTHER[i] ) <= BOUNDS;
     if ( !isWithinBounds[i] ) {
-      Serial.println( "OOB" );
-      return;
+      return false;
     }
   }
-  //  otherwise, we're in bounds
-  Serial.println( "IB" );
+  return true;
+}
+
+char gazesMatchChar() {
+  if ( gazesMatch() ) {
+    return '1';
+  }
+  return '0';
+}
+
+void compareOwnToOtherPosition() {
+  if ( gazesMatch() ) {
+    Serial.println( "IB" );
+  } else {
+    Serial.println( "OOB" );
+  }
+}
+
+bool statesMatch() {
+  return STATES[0] == STATES[1];
+}
+
+char statesMatchChar() {
+  if ( statesMatch() ) {
+    return '1';
+  }
+  return '0';
+}
+
+bool fixMetMatch() {
+  if ( FIX_MET[0] == 0 ) return false;
+  return FIX_MET[0] == FIX_MET[1];
+}
+
+char fixMetMatchChar() {
+  if ( fixMetMatch() ) return '1';
+  return '0';
 }
 
 void updateEyePosition( String eyePosition, bool isOwn ) {
@@ -234,20 +293,24 @@ void updateEyePosition( String eyePosition, bool isOwn ) {
   }
 }
 
-int stringEyePositionToInt( String eyePosition ) {
-  return stringToInt( eyePosition, 1 );
+void updateStates( String incomingState, bool isOwn ) {
+  int index = 1;
+  if ( isOwn ) {
+    index = 0;
+  }
+  STATES[index] = stringToInt( incomingState, 1 );
 }
 
-int stringToInt( String str, int removeNLeading ) {
-  int bufferSize = str.length() + 1;
-  char charNumber[ bufferSize ] = { 'b' };
-  if ( removeNLeading > 0 ) {
-    for ( int i = 0; i < removeNLeading; i++ ) {
-      str.remove(0, 1); 
-    }
+void updateFixMet( String incomingFix, bool isOwn ) {
+  int index = 1;
+  if ( isOwn ) {
+    index = 0;
   }
-  str.toCharArray( charNumber, bufferSize );
-  return atol( charNumber );
+  FIX_MET[index] = stringToInt( incomingFix, 1 );
+}
+
+int stringEyePositionToInt( String eyePosition ) {
+  return stringToInt( eyePosition, 1 );
 }
 
 void updateRewardSizes( String rewardSize ) {
@@ -262,11 +325,27 @@ void updateRewardSizes( String rewardSize ) {
   REWARD_SIZES[ rewardIndex ] = stringToInt( rewardSize, 1 );
 }
 
+void updateChoice( String choice ) {
+  CORRECT_CHOICE = stringToInt( choice, 1 );
+}
+
 void handleRequest() {
-  Wire.write( message );
+  if ( message == MESSAGE__COMPARE_STATES ) {
+    Wire.write( statesMatchChar() );
+  } else if ( message == MESSAGE__COMPARE_GAZE ) {
+    Wire.write( gazesMatchChar() );
+  } else if ( message == MESSAGE__REQUEST_CHOICE ) {
+    Wire.write( smallIntToDecimalChar(CORRECT_CHOICE) );
+    CORRECT_CHOICE = 0;
+  } else if ( message == MESSAGE__COMPARE_FIX_MET )  {
+    Wire.write( fixMetMatchChar() );
+  } else {
+    Wire.write( message );
+  }
 }
 
 void deliverReward( int index ) {
+  if ( DEBUG ) Serial.println("reward!");
   digitalWrite( REWARD_PINS[ index ], HIGH );
   digitalWrite( LED_BUILTIN, HIGH );
   delay( REWARD_SIZES[ index ] );
@@ -275,13 +354,11 @@ void deliverReward( int index ) {
   delay( 100 );
 }
 
-char toChar( byte toConvert ) {
-  return toConvert & 0xff;
+char smallIntToDecimalChar( int a ) {
+  char b[2];
+  String str;
+  str=String( a );
+  str.toCharArray( b, 2 );
+  return b[0];
 }
 
-int findIndex( char arr[], int len, char lookFor ) {
-  for ( int i = 0; i < len; ++i ) {
-    if ( arr[i] == lookFor ) return i;
-  }
-  return -1;
-}

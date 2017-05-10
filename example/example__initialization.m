@@ -8,7 +8,7 @@ messages = { ...
   struct('message', 'COMPARE', 'char', 'C' ) ...
 };
 
-port = 'COM3';
+port = 'COM4';
 baud_rate = 115200;
 
 comm = Communicator( messages, port, baud_rate );

@@ -1,42 +1,24 @@
 #include <Wire.h>
+#include <BrainsTask.h>
 
-//  MESSAGES
-
-char MESSAGE__SYNCH = 'S';
-char MESSAGE__AWAIT_SYNCH = 'W';
-char MESSAGE__ERROR = '1';
-char MESSAGE__EYE_START = 'E';
-char MESSAGE__EYE_END = 'T';
-char MESSAGE__EYE_X = 'X';
-char MESSAGE__EYE_Y = 'Y';
-// IMPORTANT -- Check slave.ino to ensure
-// none of these reward characters are those
-// match those of the slave
-char MESSAGES__REWARDS[ 2 ] = { 'N', 'M' };
-char MESSAGE__REWARD_SIZE_START = 'U';
-char MESSAGE__REWARD_SIZE_END = 'V';
-char MESSAGE__REWARD_DELIVERED = 'R';
+//  Other messages are determined in BrainsTask.h
 
 //	ADDRESSES
-
 int SLAVE_ADDRESS = 9;
 
 //	READ FROM SERIAL
-
 byte byteRead;
 
 //	response character
-
 char message = MESSAGE__ERROR;
 
-//  configure pin numbers
-
+//  configure rewards
 const int N_REWARDS = 2;
-int REWARD_PINS[ N_REWARDS ] = { 37, 40 };
-
-//  reward size
-
-const int REWARD_SIZE = 100;
+int REWARD_PINS[ N_REWARDS ] = { 7, 40 };
+// IMPORTANT -- Check slave.ino to ensure
+// none of these reward characters are those
+// match those of the slave
+char MESSAGES__REWARDS[ N_REWARDS ] = { 'N', 'M' };
 int REWARD_SIZES[ N_REWARDS ] = { 100, 100 };
 
 //	BEGIN
@@ -61,50 +43,27 @@ void loop() {
 
     if ( readChar == MESSAGE__SYNCH ) {
       synchronize();
+    } else if ( readChar == MESSAGE__REQUEST_CHOICE ) {
+      char choice = transmitAndReceive( readChar );
+      Serial.println( choice );
+    } else if ( readChar == MESSAGE__COMPARE_GAZE ) {
+      Serial.println( gazesMatchChar() );
+    } else if ( readChar == MESSAGE__COMPARE_STATES ) {
+      Serial.println( statesMatchChar() );
+    } else if ( readChar == MESSAGE__COMPARE_FIX_MET ) {
+      Serial.println( fixMetMatchChar() );
+    } else if ( readChar == MESSAGE__FIX_START ) {
+      readAndTransmit( SLAVE_ADDRESS, MESSAGE__FIX_END, "" );
+    } else if ( readChar == MESSAGE__STATE_START ) {
+      readAndTransmit( SLAVE_ADDRESS, MESSAGE__STATE_END, "b" );
+    } else if ( readChar == MESSAGE__CHOICE_START ) {
+      readAndTransmit( SLAVE_ADDRESS, MESSAGE__CHOICE_END, "" );
     } else if ( readChar == MESSAGE__EYE_START ) {
-      String eyePosition = "";
-      while ( Serial.available() == 0 ) {
-        delay(5);
-      }
-      while ( Serial.available() > 0 ) {
-        int pos = Serial.read();
-        if ( pos == MESSAGE__EYE_END ) {
-          delay( 5 );
-          Wire.beginTransmission( SLAVE_ADDRESS );
-          Wire.write( eyePosition.c_str() );
-          Wire.endTransmission();
-          break;
-        } else {
-          eyePosition += (char)pos;
-        }
-      }
+      readAndTransmit( SLAVE_ADDRESS, MESSAGE__EYE_END, "" );
     } else if ( readChar == MESSAGE__REWARD_SIZE_START ) {
-      String rewardSize = "";
-      while ( Serial.available() == 0 ) {
-        delay(5);
-      }
-      while ( Serial.available() > 0 ) {
-        int pos = Serial.read();
-        if ( pos == MESSAGE__REWARD_SIZE_END ) {
-          delay( 5 );
-          int rwdIndex = findIndex( MESSAGES__REWARDS, N_REWARDS, rewardSize.charAt(0) );
-          // is this the master's reward, or the slave's?
-          // if we can't find the character in the MESSAGES__REWARDS array,
-          // it must the slave's reward
-          if ( rwdIndex == -1 ) {
-            Wire.beginTransmission( SLAVE_ADDRESS );
-            Wire.write( rewardSize.c_str() );
-            Wire.endTransmission();
-          } else {
-            updateRewardSizes( rewardSize );
-          }
-          break;
-        } else {
-          rewardSize += (char)pos;
-        }
-      }
+      readAndTransmit( SLAVE_ADDRESS, MESSAGE__REWARD_SIZE_END, "" );
     } else if ( readChar == 'T' ) {
-      relay( '*' );
+      //      relay( '*' );
     } else {
       //	is the reward message one of the master's rewards?
       //  if so, deliver the reward. if not, transmit the read char
@@ -129,10 +88,6 @@ void transmit( char c ) {
   Wire.endTransmission();
 }
 
-char toChar( byte toConvert ) {
-  return toConvert & 0xff;
-}
-
 void synchronize() {
   transmit( MESSAGE__SYNCH );
 
@@ -141,7 +96,7 @@ void synchronize() {
   while ( !Wire.available() ) {
     //	wait in the loop until we get a response
     delay( 10 );
-    relay( MESSAGE__AWAIT_SYNCH );
+    //relay( MESSAGE__AWAIT_SYNCH );
     continue;
   }
 
@@ -152,6 +107,56 @@ void synchronize() {
   } else {
     synchronize();
   }
+}
+
+char transmitAndReceive( char msg ) {
+  transmit( msg );
+  Wire.requestFrom( SLAVE_ADDRESS, 1 );
+  while ( !Wire.available() ) {
+    delay( 10 );
+  }
+  char response = Wire.read();
+  return response;
+}
+
+bool matchesOther( char msg ) {
+  char response = transmitAndReceive( msg );
+  if ( response == '1' ) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool gazesMatch() {
+  return matchesOther ( MESSAGE__COMPARE_GAZE );
+}
+
+bool statesMatch() {
+  return matchesOther( MESSAGE__COMPARE_STATES );
+}
+
+bool fixMetMatch() {
+  return matchesOther( MESSAGE__COMPARE_FIX_MET );
+}
+
+char statesMatchChar() {
+  if ( statesMatch() ) {
+    return '1';
+  }
+  return '0';
+}
+
+char gazesMatchChar() {
+  if ( gazesMatch() ) {
+    return '1';
+  }
+  return '0';
+}
+
+char fixMetMatchChar() {
+  if ( fixMetMatch() ) return '1';
+  return '0';
 }
 
 void handleReceipt( int nBytes ) {
@@ -166,18 +171,6 @@ void handleReceipt( int nBytes ) {
   if ( message == MESSAGE__SYNCH ) {
     relay( message ); return;
   }
-}
-
-int stringToInt( String str, int removeNLeading ) {
-  int bufferSize = str.length() + 1;
-  char charNumber[ bufferSize ] = { 'b' };
-  if ( removeNLeading > 0 ) {
-    for ( int i = 0; i < removeNLeading; i++ ) {
-      str.remove(0, 1);
-    }
-  }
-  str.toCharArray( charNumber, bufferSize );
-  return atol( charNumber );
 }
 
 void updateRewardSizes( String rewardSize ) {
@@ -199,11 +192,4 @@ void deliverReward( int index ) {
   digitalWrite( REWARD_PINS[ index ], LOW );
   digitalWrite( LED_BUILTIN, LOW );
   delay( 100 );
-}
-
-int findIndex( char arr[], int len, char lookFor ) {
-  for ( int i = 0; i < len; ++i ) {
-    if ( arr[i] == lookFor ) return i;
-  }
-  return -1;
 }
