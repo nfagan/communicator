@@ -12,6 +12,9 @@ byte byteRead;
 //	response character
 char message = MESSAGE__ERROR;
 
+// Initialization check
+bool INITIALIZED = false;
+
 //  configure rewards
 const int N_REWARDS = 2;
 int REWARD_PINS[ N_REWARDS ] = { 7, 40 };
@@ -35,6 +38,10 @@ void setup() {
 void loop() {
 
   //	serial handling
+  if ( !INITIALIZED ) {
+    Serial.println( '*' );
+    INITIALIZED = true;
+  }
 
   if ( Serial.available() ) {
     byteRead = Serial.read();

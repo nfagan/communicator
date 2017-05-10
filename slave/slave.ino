@@ -19,6 +19,9 @@ int SLAVE_ADDRESS = 9;
 //  READ FROM SERIAL
 byte byteRead;
 
+//  Check if initialized
+bool INITIALIZED = false;
+
 //  response character
 char message = MESSAGE__ERROR;
 
@@ -61,6 +64,11 @@ void setup() {
 void loop() {
 
   //  slave serial input
+
+  if ( !INITIALIZED ) {
+    Serial.println( '*' );
+    INITIALIZED = true;
+  }
 
   if ( Serial.available() ) {
     byteRead = Serial.read();

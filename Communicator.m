@@ -4,6 +4,8 @@ classdef Communicator
     messages;
     chars;
     communicator;
+    RECEIPT_TIMEOUT = 5;
+    INIT_TIMEOUT = 5;
     const = struct( ...
       'chars', struct( ...
           'GAZE_START', 'E', 'GAZE_END', 'T' ...
@@ -11,6 +13,7 @@ classdef Communicator
         , 'STATE_START', 'I', 'STATE_END', 'O' ...
         , 'CHOICE_START', 'F', 'CHOICE_END', 'G', 'CHOICE_ID', 'f' ...
         , 'FIX_START', 's', 'FIX_END', 'e', 'FIX_ID', 'i' ...
+        , 'INITIALIZATION', '*' ...
         ) ...
       );
   end
@@ -56,6 +59,26 @@ classdef Communicator
       obj.communicator = serial( port );
       obj.communicator.BaudRate = baud_rate;
       obj.start();
+      obj.await_init_feedback();
+    end
+    
+    function await_init_feedback(obj)
+      
+      %   AWAIT_INIT_FEEDBACK -- Wait for the Arduino to initialize before
+      %     proceeding.
+      
+      start_await = tic;
+      while ( obj.communicator.BytesAvailable == 0 )
+        if ( toc(start_await) > obj.INIT_TIMEOUT )
+          error( ['Failed to recieve an initialization response within' ...
+            , '%0.1f seconds.'], obj.INIT_TIMEOUT );
+        end
+      end
+      value = obj.await_and_return_non_null();
+      if ( ~isequal(value, obj.const.chars.INITIALIZATION) )
+        error( ['The response ''%s'' did not match the initialization' ...
+          , ' character.'], obj.const.chars.INITIALIZATION );
+      end
     end
 
     function send(obj, message)
@@ -164,11 +187,19 @@ classdef Communicator
       %     OUT:
       %       - `response` (char) -- Single non-null response.
       
+      start_await = tic;
       while ( obj.communicator.BytesAvailable == 0 )
-        continue;
+        if ( toc(start_await) > obj.RECEIPT_TIMEOUT )
+          error( 'No bytes were received within %0.1f seconds.', obj.RECEIPT_TIMEOUT );
+        end
       end
       response = obj.receive();
+      start_await = tic;
       while ( isequal(response, '') )
+        if ( toc(start_await) > obj.RECEIPT_TIMEOUT )
+          error( 'No non-empty characters were received within %0.1f seconds.' ...
+            , obj.RECEIPT_TIMEOUT );
+        end
         response = obj.receive();
       end
     end
